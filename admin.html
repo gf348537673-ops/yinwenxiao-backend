@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>音纹消 · 管理员后台</title>
+    <style>
+        * {box-sizing: border-box; margin: 0; padding: 0; font-family: "微软雅黑", sans-serif;}
+        body {background: #0f172a; color: #fff; padding: 20px;}
+        .container {max-width: 800px; margin: 0 auto;}
+        .card {background: #1e293b; border-radius: 10px; padding: 20px; margin-bottom: 15px;}
+        h2 {color: #22d3ee; margin-bottom: 15px; text-align: center;}
+        input, select, textarea {width: 100%; padding: 10px; margin: 8px 0; border-radius: 6px; background: #334155; color: #fff; border: none;}
+        button {padding: 10px 16px; background: #22d3ee; color: #000; border: none; border-radius: 6px; cursor: pointer; margin-right: 8px; font-weight: bold;}
+        button.danger {background: #ef4444; color: #fff;}
+        .code-box {background: #000; color: #22d3ee; padding: 12px; border-radius: 6px; margin: 10px 0; font-family: monospace; word-break: break-all;}
+        .log-box {background: #000; color: #22c55e; padding: 12px; border-radius: 6px; height: 200px; overflow-y: auto; font-size: 12px; margin-top: 10px;}
+        .hidden {display: none;}
+        .tip {font-size: 12px; color: #94a3b8; margin-top: 5px;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>🎧 音纹消 · 管理员后台</h2>
+
+    <div class="card" id="loginCard">
+        <h3>管理员登录</h3>
+        <input type="password" id="adminPwd" placeholder="请输入管理员密码">
+        <button onclick="adminLogin()">登录后台</button>
+        <p class="tip">忘记密码？修改代码中的ADMIN_PASSWORD即可重置</p>
+    </div>
+
+    <div id="adminPanel" class="hidden">
+        <div class="card">
+            <h3>生成激活码</h3>
+            <input type="text" id="deviceId" placeholder="客户的机器码">
+            <select id="planType">
+                <option value="custom">自定义套餐</option>
+                <option value="trial">试用版（1天2次）</option>
+                <option value="once">单次（1天1次）</option>
+                <option value="month">月会员（30天50次）</option>
+                <option value="year">年会员（365天1000次）</option>
+            </select>
+            <input type="number" id="customDays" placeholder="自定义天数" style="display: none;">
+            <input type="number" id="customTimes" placeholder="自定义次数" style="display: none;">
+            <button onclick="generateCode()">生成激活码</button>
+            <div class="code-box" id="newCodeResult"></div>
+        </div>
+
+        <div class="card">
+            <h3>查询激活码</h3>
+            <input type="text" id="queryDevice" placeholder="输入机器码查询">
+            <button onclick="queryCodes()">查询</button>
+            <div class="code-box" id="queryResult"></div>
+        </div>
+
+        <div class="card">
+            <h3>数据管理</h3>
+            <button onclick="downloadData()">下载 data.json</button>
+            <input type="file" id="uploadData" accept=".json" onchange="uploadData(event)" style="display: none;">
+            <p class="tip">生成激活码后必须上传这个文件到GitHub！</p>
+        </div>
+
+        <div class="card">
+            <h3>操作日志</h3>
+            <div class="log-box" id="logBox"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 密码已改成你指定的 shahe123
+const ADMIN_PASSWORD = "shahe123";
+const GITHUB_USER = "GF348537673-OPS";
+const REPO_NAME = "yinwenxiao-backend";
+const DATA_FILE_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/main/data.json`;
+
+let currentData = { codes: [], logs: [] };
+
+document.getElementById("planType").onchange = function() {
+    const isCustom = this.value === "custom";
+    document.getElementById("customDays").style.display = isCustom ? "block" : "none";
+    document.getElementById("customTimes").style.display = isCustom ? "block" : "none";
+};
+
+function adminLogin() {
+    const pwd = document.getElementById("adminPwd").value.trim();
+    if (pwd !== ADMIN_PASSWORD) { alert("密码错误！"); return; }
+    document.getElementById("loginCard").classList.add("hidden");
+    document.getElementById("adminPanel").classList.remove("hidden");
+    loadData();
+}
+
+async function loadData() {
+    try {
+        const res = await fetch(DATA_FILE_URL);
+        currentData = await res.json();
+        updateLogs();
+    } catch(e) {
+        currentData = { codes: [], logs: [] };
+        alert("首次使用，生成激活码后上传data.json即可");
+    }
+}
+
+function generateRandomCode() {
+    const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    return Array.from({length:36},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+}
+
+function generateCode() {
+    const device = document.getElementById("deviceId").value.trim();
+    if (!device || !/^DEV-[0-9A-F]{16}$/.test(device)) { alert("机器码格式错误"); return; }
+
+    let days, times;
+    const type = document.getElementById("planType").value;
+    switch(type) {
+        case "trial": days=1; times=2; break;
+        case "once": days=1; times=1; break;
+        case "month": days=30; times=50; break;
+        case "year": days=365; times=1000; break;
+        case "custom":
+            days=parseInt(document.getElementById("customDays").value);
+            times=parseInt(document.getElementById("customTimes").value);
+            if(!days||!times||days<=0||times<=0){alert("请输入有效天数次数");return;}
+            break;
+    }
+
+    const code = generateRandomCode();
+    currentData.codes.push({
+        code, device, days, times, used:false, createTime:new Date().toLocaleString()
+    });
+    addLog(`生成：${device} | ${days}天${times}次`);
+    document.getElementById("newCodeResult").innerText = `激活码：${code}\n设备：${device}\n${days}天 ${times}次`;
+    downloadData();
+}
+
+function queryCodes() {
+    const device = document.getElementById("queryDevice").value.trim();
+    const list = currentData.codes.filter(i=>i.device===device);
+    if(list.length===0){document.getElementById("queryResult").innerText="无记录";return;}
+    let txt="";
+    list.forEach(i=>{
+        txt+=`码：${i.code}\n状态：${i.used?"已激活":"未激活"}\n${i.days}天 ${i.times}次\n---\n`;
+    });
+    document.getElementById("queryResult").innerText=txt;
+}
+
+function downloadData() {
+    const blob = new Blob([JSON.stringify(currentData,null,2)],{type:"application/json"});
+    const a = document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="data.json";
+    a.click();
+    alert("已下载 data.json！请上传到 GitHub 仓库！");
+}
+
+function uploadData(e) {
+    const r=new FileReader();
+    r.onload=()=>{currentData=JSON.parse(r.result);alert("加载成功！");updateLogs();}
+    r.readAsText(e.target.files[0]);
+}
+
+function addLog(c){
+    currentData.logs.unshift(`[${new Date().toLocaleString()}] ${c}`);
+    if(currentData.logs.length>200)currentData.logs=currentData.logs.slice(0,200);
+    updateLogs();
+}
+
+function updateLogs(){
+    document.getElementById("logBox").innerText=currentData.logs.join("\n");
+}
+</script>
+</body>
+</html>
