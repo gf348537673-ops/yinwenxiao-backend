@@ -1,0 +1,24 @@
+{
+  "codes": [
+    {
+      "code": "HCvnNdnOkPJWqCs58RmKiXmf4gx7AoxxC4p4",
+      "device": "DEV-626BF616F80AFC74",
+      "days": 365,
+      "times": 1000,
+      "used": false,
+      "createTime": "2026/5/5 18:01:38"
+    },
+    {
+      "code": "xWVGEikvUi0lNxADMrSN7ofmAMobahuo7oJ7",
+      "device": "DEV-626BF616F80AFC74",
+      "days": 30,
+      "times": 50,
+      "used": false,
+      "createTime": "2026/5/5 18:09:03"
+    }
+  ],
+  "logs": [
+    "[2026/5/5 18:09:03] 生成：DEV-626BF616F80AFC74 | 30天50次",
+    "[2026/5/5 18:01:38] 生成：DEV-626BF616F80AFC74 | 365天1000次"
+  ]
+}
